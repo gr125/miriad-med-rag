@@ -1,0 +1,3 @@
+[submodule "data/miriad-5.8M"]
+	path = data/miriad-5.8M
+	url = https://huggingface.co/datasets/miriad/miriad-5.8M
