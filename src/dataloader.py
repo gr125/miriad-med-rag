@@ -44,11 +44,35 @@ def split_dataset(dataset, output_dir, stratify_column='specialty', test_size=0.
     table = table.filter(filter_mask)
     print(f"Table filtered, {len(table)} rows remaining.")
 
+    print("Identifying classes with a single sample...")
+    # Get value counts of the stratification column
+    value_counts = table[stratify_column].value_counts()
 
-    print("Preparing for stratified split...")
-    # Get the stratification column as a numpy array for sklearn
-    stratify_data = table[stratify_column].to_numpy()
-    indices = np.arange(len(table))
+    # Find classes with only one sample
+    single_sample_classes = value_counts.filter(pc.equal(value_counts.field(1), 1))
+    single_sample_class_names = single_sample_classes.field(0)
+    
+    if len(single_sample_class_names) > 0:
+        print(f"Found {len(single_sample_class_names)} classes with a single sample. These will be added to the training set.")
+        
+        # Create a mask for rows that are in the single sample classes
+        single_sample_mask = pc.is_in(table[stratify_column], value_set=single_sample_class_names)
+        
+        # Split the table into single-sample and multi-sample tables
+        single_sample_table = table.filter(single_sample_mask)
+        multi_sample_table = table.filter(pc.invert(single_sample_mask))
+        
+        print(f"Single sample table size: {len(single_sample_table)}")
+        print(f"Multi sample table size: {len(multi_sample_table)}")
+    else:
+        print("No classes with a single sample found.")
+        multi_sample_table = table
+        single_sample_table = None
+    
+    print("Preparing for stratified split on the remaining data...")
+    # Get the stratification column as a numpy array for sklearn from the multi_sample_table
+    stratify_data = multi_sample_table[stratify_column].to_numpy()
+    indices = np.arange(len(multi_sample_table))
 
     # Calculate split sizes
     train_size = 1 - test_size - val_size
@@ -75,10 +99,17 @@ def split_dataset(dataset, output_dir, stratify_column='specialty', test_size=0.
     )
 
     print("Creating table splits from indices...")
-    # Use the indices to create the final tables
-    train_table = table.take(pa.array(train_indices))
-    val_table = table.take(pa.array(val_indices))
-    test_table = table.take(pa.array(test_indices))
+    # Use the indices to create the final tables from multi_sample_table
+    train_table_split = multi_sample_table.take(pa.array(train_indices))
+    val_table = multi_sample_table.take(pa.array(val_indices))
+    test_table = multi_sample_table.take(pa.array(test_indices))
+
+    # Combine the single sample table with the training table
+    if single_sample_table is not None:
+        print("Concatenating single-sample table with the training set.")
+        train_table = pa.concat_tables([train_table_split, single_sample_table])
+    else:
+        train_table = train_table_split
 
     # Save to parquet files
     print(f"Saving split files to {output_dir}...")
