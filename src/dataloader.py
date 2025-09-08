@@ -27,7 +27,17 @@ def split_dataset(dataset, output_dir, stratify_column='specialty', test_size=0.
     print("Reading table from dataset...")
     table = dataset.read()
     print(f"Table created with {len(table)} rows.")
-
+    table.cast(pa.schema([pa.field('qa_id', pa.string()),
+                          pa.field('paper_id', pa.int64()),
+                          pa.field('question', pa.string()),
+                          pa.field('answer', pa.large_string()),
+                          pa.field('paper_url', pa.string()),
+                          pa.field('paper_title', pa.string()),
+                          pa.field('passage_text', pa.large_string()),
+                          pa.field('passage_position', pa.int8()),
+                          pa.field('year', pa.int64()),
+                          pa.field('venue', pa.string()),
+                          pa.field('specialty', pa.string())]))
     os.makedirs(output_dir, exist_ok=True)
 
     # Drop rows with nulls in the stratification column.
